@@ -5,20 +5,29 @@ import subprocess
 
 
 def get_diff() -> str:
-    try:
-        branch = subprocess.check_output(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True
-        ).strip()
-        diff = subprocess.check_output(
-            ["git", "diff", f"origin/{branch}...HEAD"], text=True
-        )
-        if diff:
-            return diff
-    except subprocess.CalledProcessError:
-        pass
+    # push 対象（= ローカルにあって push 先にまだ無い変更）を優先的に拾う。
+    # merge-base 起点なので、複数コミットをまとめて push しても全体をレビューできる。
+    # @{push}     … push 先の追跡ブランチ（pre-push で最も正確）
+    # @{upstream} … upstream 追跡ブランチ
+    # origin/HEAD … リモートの既定ブランチ（新規ブランチで upstream 未設定のとき）
+    candidates = [
+        ["git", "diff", "--merge-base", "@{push}", "HEAD"],
+        ["git", "diff", "--merge-base", "@{upstream}", "HEAD"],
+        ["git", "diff", "--merge-base", "origin/HEAD", "HEAD"],
+    ]
+    for cmd in candidates:
+        try:
+            diff = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+            if diff.strip():
+                return diff
+        except subprocess.CalledProcessError:
+            continue
 
+    # 最後の手段: 直近コミットのみ
     try:
-        return subprocess.check_output(["git", "diff", "HEAD~1..HEAD"], text=True)
+        return subprocess.check_output(
+            ["git", "diff", "HEAD~1", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        )
     except subprocess.CalledProcessError:
         return ""
 
@@ -36,6 +45,10 @@ def review(diff: str) -> str:
         return ""
 
     if len(diff) > 100_000:
+        print(
+            "[Gemini] 差分が大きいため先頭 100,000 文字のみレビューします（残りは未確認）。",
+            file=sys.stderr,
+        )
         diff = diff[:100_000] + "\n... (差分が大きいため省略)"
 
     prompt = f"""以下のコード差分をレビューしてください。
@@ -53,9 +66,13 @@ def review(diff: str) -> str:
 {diff}
 """
 
+    # 無料枠で使えるモデルは変わるため env で差し替え可能にする。
+    # 例: gemini-2.5-flash / gemini-flash-latest など（要・最新の無料枠確認）
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
     try:
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        response = client.models.generate_content(model=model, contents=prompt)
         return response.text
     except Exception as e:
         print(f"[Gemini] APIエラーのためスキップします: {e}", file=sys.stderr)

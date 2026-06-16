@@ -10,7 +10,7 @@ set -e
 
 TARGET="$1"
 ECOSYSTEM="${2:-none}"
-CERBERUS_DIR="$(cd "$(dirname "$0")" && pwd)"
+VAUBAN_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ -z "$TARGET" ]; then
   echo "Usage: bash setup.sh <target-repo-path> [npm|pip|none]"
@@ -23,19 +23,19 @@ if [ ! -d "$TARGET/.git" ]; then
 fi
 
 TARGET="$(cd "$TARGET" && pwd)"
-echo "Setting up pj-cerberus in: $TARGET (ecosystem: $ECOSYSTEM)"
+echo "Setting up pj-vauban in: $TARGET (ecosystem: $ECOSYSTEM)"
 echo ""
 
 # 1. scripts/gemini_review.py
 mkdir -p "$TARGET/scripts"
-cp "$CERBERUS_DIR/scripts/gemini_review.py" "$TARGET/scripts/gemini_review.py"
+cp "$VAUBAN_DIR/scripts/gemini_review.py" "$TARGET/scripts/gemini_review.py"
 echo "✓ scripts/gemini_review.py"
 
 # 2. .pre-commit-config.yaml
 cat > "$TARGET/.pre-commit-config.yaml" << 'EOF'
 repos:
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
@@ -49,6 +49,7 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+        verbose: true
 EOF
 echo "✓ .pre-commit-config.yaml"
 
@@ -91,7 +92,7 @@ fi
 # 5. pre-commit フックのインストール
 cd "$TARGET"
 
-python3 -m pip install detect-secrets pre-commit google-generativeai --quiet --user
+python3 -m pip install detect-secrets pre-commit google-genai --quiet --user
 
 if [ ! -f ".secrets.baseline" ]; then
   python3 -m detect_secrets scan \
