@@ -334,3 +334,22 @@ Zaion check（人間の最終確認・最後の砦）→ マージ
 - **Layer 2（Gemini）の致命的不具合を修正**: 旧 SDK `google-generativeai` → 新 `google-genai`／pre-commit フックに `verbose: true`（exit 0 でも結果表示）／`get_diff` を `@{push}→@{upstream}→origin/HEAD` の merge-base 起点に／モデルを `GEMINI_MODEL` 化・既定 `gemini-2.5-flash`（`gemini-2.0-flash` は無料枠 `limit:0` で離脱）／100k 超の差分切り捨てを警告化。
 - **Semgrep**: SARIF 出力＋Security タブ連携（`if: always` / `continue-on-error`）＋ artifact 保存。`--error` のブロックは維持。`.semgrepignore` 雛形を生成。
 - **運用**: `.secrets.baseline` の棚卸し手順（`detect-secrets audit`）を明記／外部送信のデータフロー表を追加／`VAUBAN_VERSION`・`--version` でコピー配布のドリフトを可視化。
+
+---
+
+## 外部レビュー履歴
+
+設計・コードの死角を減らすため、開発に関与していない別ベンダーの LLM に二次レビューを依頼している（ベンダーを散らして指摘の重複・共倒れを避ける方針）。
+
+### 2026-06-16 — Google AI Studio / Gemini 3.5 Flash
+
+- **依頼方法:** `pj-vauban-review-bundle.md`（対象ファイル全文＋対応済み論点＋焦点プロンプト）を貼り、優先度別（🔴/🟡/🟢）で批判的にレビューさせた。
+- **主な指摘と対応（→ v1.4.0 で反映）:**
+  - 🔴 **既存 `.pre-commit-config.yaml` / workflow の無条件上書き** → マーカー方式（`# pj-vauban managed`）で既存資産を `*.bak` 退避してから上書き。
+  - 🟡 lock/生成ファイルで実コードが 100k 制限で切り捨て → `get_diff` で除外。
+  - 🟡 exit 0 の見落とし・オオカミ少年化 → 指摘時のみ強調表示／コード差分ゼロなら API 不発。
+  - 🟡 無料枠 Gemini の学習利用リスク → 警告を格上げ。
+  - 🟡 timeout 20s が長い → 10s。/ 🟡 semgrep ピン留めのドリフト → `~=1.166` に緩和。
+  - 🟢 detect-secrets フックの `exclude`／導入済みなら install skip。
+- **議論の上で見送り:** `semgrep-action` への全面移行（コンテナ/Node 依存が戻るため）、SCA 即時実行（npm/pip audit）、全 repo 一括同期ラッパー。いずれも「個人向けの軽量・引き締まったスコープ」を維持するための判断。
+- 詳細な差分は [変更履歴 v1.4.0](#変更履歴) を参照。
