@@ -10,7 +10,7 @@ set -e
 
 # pj-vauban のバージョン。各リポジトリに配るファイルにこの値を埋め込み、
 # どの repo が古い構成のままか分かるようにする。更新は setup.sh を再実行するだけ。
-VAUBAN_VERSION="1.2.0"
+VAUBAN_VERSION="1.3.0"
 
 TARGET="$1"
 ECOSYSTEM="${2:-none}"
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install semgrep
+      - run: pip install semgrep==1.166.0   # 再現性のためピン留め。定期的に更新する
       # 検出があれば --error で job を落とし push/PR をブロックする
       - name: Semgrep scan
         run: semgrep scan --config=auto --sarif --output=semgrep.sarif --error

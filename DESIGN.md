@@ -126,7 +126,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install semgrep
+      - run: pip install semgrep==1.166.0   # 再現性のためピン留め。定期的に更新する
       - name: Semgrep scan
         run: semgrep scan --config=auto --sarif --output=semgrep.sarif --error
       - name: Upload SARIF to GitHub Security

@@ -5,7 +5,7 @@ import subprocess
 
 # pj-vauban から配布されたバージョン。`--version` でどの構成が入っているか確認できる。
 # setup.sh の VAUBAN_VERSION と揃える。更新は setup.sh の再実行で行う。
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 
 def get_diff() -> str:
