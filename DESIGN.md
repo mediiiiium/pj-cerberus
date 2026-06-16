@@ -297,3 +297,24 @@ Zaion check（人間の最終確認・最後の砦）→ マージ
 **人間確認の形骸化リスク（Zaion check）:**
 
 最終の人間確認を **Zaion check** と呼ぶ。すべての防壁を通り抜けたものを最後に止める守護神（最終ライン）であり、ここが形骸化すると多層構成全体が意味を失う。複数の AI ツールが「問題なし」と判断した後の人間確認は、注意力が下がりやすい。このシステムはバグや脆弱性を発見する機会を増やすものであり、人間がコードを読む習慣の代替ではない。AI の指摘がない状態でのマージは「問題がないこと」を意味しない。Zaion check だけは自動化・省略しない。
+
+---
+
+## 変更履歴
+
+バージョンは `setup.sh --version` / `python3 scripts/gemini_review.py --version` で確認できる。
+
+### v1.3.0（2026-06-16）
+- Semgrep を `semgrep==1.166.0` にバージョンピン留め（再現性・サプライチェーン対策）。
+- MIT `LICENSE` を追加（公開準備）。
+
+### v1.2.0（2026-06-16）— 堅牢性
+- Gemini API に HTTP タイムアウト（`GEMINI_TIMEOUT_MS`・既定 20 秒）を追加。pre-push で API が応答しないと `git push` がハングする問題を解消。
+- `setup.sh` の依存導入を PEP 668（externally-managed）対応で 3 段フォールバック化。失敗時は中途半端に止まらず pipx 案内を出して終了。
+- Gemini フックを `language: python` + `additional_dependencies: [google-genai]` に変更し、依存を pre-commit の隔離環境で管理（グローバル python 依存による無言スキップを根絶）。
+
+### v1.1.0（2026-06-16）— 改名＋Layer 2 修正＋運用整備
+- **改名**: pj-cerberus → **pj-vauban**。最終人間レビュー層を **Zaion check** と命名。
+- **Layer 2（Gemini）の致命的不具合を修正**: 旧 SDK `google-generativeai` → 新 `google-genai`／pre-commit フックに `verbose: true`（exit 0 でも結果表示）／`get_diff` を `@{push}→@{upstream}→origin/HEAD` の merge-base 起点に／モデルを `GEMINI_MODEL` 化・既定 `gemini-2.5-flash`（`gemini-2.0-flash` は無料枠 `limit:0` で離脱）／100k 超の差分切り捨てを警告化。
+- **Semgrep**: SARIF 出力＋Security タブ連携（`if: always` / `continue-on-error`）＋ artifact 保存。`--error` のブロックは維持。`.semgrepignore` 雛形を生成。
+- **運用**: `.secrets.baseline` の棚卸し手順（`detect-secrets audit`）を明記／外部送信のデータフロー表を追加／`VAUBAN_VERSION`・`--version` でコピー配布のドリフトを可視化。
