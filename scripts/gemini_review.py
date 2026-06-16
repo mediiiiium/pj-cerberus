@@ -1,11 +1,32 @@
 #!/usr/bin/env python3
+# pj-vauban managed — setup.sh が各リポジトリに配布します。再実行で上書きされます。
 import sys
 import os
 import subprocess
 
 # pj-vauban から配布されたバージョン。`--version` でどの構成が入っているか確認できる。
 # setup.sh の VAUBAN_VERSION と揃える。更新は setup.sh の再実行で行う。
-__version__ = "1.3.0"
+__version__ = "1.4.0"
+
+# lock ファイル・自動生成物・ビルド成果物は差分から除外する。
+# これらが混ざると 100k 文字制限で実コードが切り捨てられ、レビューから漏れる。
+# また AI へ送るノイズ・プライバシー面積も減らせる。
+EXCLUDES = [
+    "--",
+    ".",
+    ":(exclude)*package-lock.json",
+    ":(exclude)*yarn.lock",
+    ":(exclude)*pnpm-lock.yaml",
+    ":(exclude)*poetry.lock",
+    ":(exclude)*Pipfile.lock",
+    ":(exclude)*composer.lock",
+    ":(exclude)*Cargo.lock",
+    ":(exclude)*go.sum",
+    ":(exclude)*.lock",
+    ":(exclude)*.min.js",
+    ":(exclude)*.min.css",
+    ":(exclude)*.map",
+]
 
 
 def get_diff() -> str:
@@ -15,9 +36,9 @@ def get_diff() -> str:
     # @{upstream} … upstream 追跡ブランチ
     # origin/HEAD … リモートの既定ブランチ（新規ブランチで upstream 未設定のとき）
     candidates = [
-        ["git", "diff", "--merge-base", "@{push}", "HEAD"],
-        ["git", "diff", "--merge-base", "@{upstream}", "HEAD"],
-        ["git", "diff", "--merge-base", "origin/HEAD", "HEAD"],
+        ["git", "diff", "--merge-base", "@{push}", "HEAD", *EXCLUDES],
+        ["git", "diff", "--merge-base", "@{upstream}", "HEAD", *EXCLUDES],
+        ["git", "diff", "--merge-base", "origin/HEAD", "HEAD", *EXCLUDES],
     ]
     for cmd in candidates:
         try:
@@ -30,7 +51,9 @@ def get_diff() -> str:
     # 最後の手段: 直近コミットのみ
     try:
         return subprocess.check_output(
-            ["git", "diff", "HEAD~1", "HEAD"], text=True, stderr=subprocess.DEVNULL
+            ["git", "diff", "HEAD~1", "HEAD", *EXCLUDES],
+            text=True,
+            stderr=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError:
         return ""
@@ -76,8 +99,8 @@ def review(diff: str) -> str:
     model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
     # pre-push フックなので、API が応答しないと push がハングする。
-    # 必ずタイムアウトを設け、超過時は例外→スキップして push を通す。
-    timeout_ms = int(os.environ.get("GEMINI_TIMEOUT_MS", "20000"))
+    # 開発テンポを優先し既定 10 秒。超過時は例外→スキップして push を通す。
+    timeout_ms = int(os.environ.get("GEMINI_TIMEOUT_MS", "10000"))
 
     try:
         client = genai.Client(
@@ -98,8 +121,9 @@ if __name__ == "__main__":
 
     diff = get_diff()
 
+    # lock/生成物を除いた実コード差分が無ければ、API を叩かずスキップ（ノイズ削減）。
     if not diff:
-        print("[Gemini] 差分なし。スキップします。")
+        print("[Gemini] レビュー対象のコード差分なし。スキップします。", file=sys.stderr)
         sys.exit(0)
 
     print("[Gemini] レビュー中...", file=sys.stderr)
@@ -108,10 +132,23 @@ if __name__ == "__main__":
     if not result:
         sys.exit(0)
 
-    print("\n=== Gemini レビュー結果 ===")
-    print(result)
-    print("===========================\n")
+    # 指摘が無いときは静かに 1 行だけ（push ログに埋もれて問題ない）。
+    cleaned = result.strip().rstrip("。")
+    if cleaned == "問題なし":
+        print("[Gemini] 問題なし", file=sys.stderr)
+        sys.exit(0)
 
-    # 常に exit 0（情報表示のみ、プッシュはブロックしない）
-    # ブロックしたい場合は "問題なし" を含まないときに exit 1 に変更する
+    # 指摘があるときだけ枠で囲んで目立たせる（端末なら色付き）。
+    use_color = sys.stdout.isatty()
+    yel = "\033[1;33m" if use_color else ""
+    rst = "\033[0m" if use_color else ""
+    bar = "═" * 56
+    print(f"\n{yel}╔{bar}╗{rst}")
+    print(f"{yel}║  ⚠  Gemini レビュー指摘あり — 確認してください{rst}")
+    print(f"{yel}╚{bar}╝{rst}")
+    print(result)
+    print(f"{yel}{'─' * 58}{rst}\n")
+
+    # 常に exit 0（情報表示のみ、プッシュはブロックしない）。
+    # ブロックしたい場合は、ここで sys.exit(1) に変更する。
     sys.exit(0)

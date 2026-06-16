@@ -10,7 +10,7 @@ set -e
 
 # pj-vauban のバージョン。各リポジトリに配るファイルにこの値を埋め込み、
 # どの repo が古い構成のままか分かるようにする。更新は setup.sh を再実行するだけ。
-VAUBAN_VERSION="1.3.0"
+VAUBAN_VERSION="1.4.0"
 
 TARGET="$1"
 ECOSYSTEM="${2:-none}"
@@ -39,19 +39,35 @@ echo ""
 echo "pj-vauban version: $VAUBAN_VERSION"
 echo ""
 
+# 生成ファイルにはマーカーを埋め込む。再実行時、マーカーの無い既存ファイル
+# （＝ユーザーが自前で用意した設定）は黙って消さず、.bak に退避してから上書きする。
+MARKER="pj-vauban managed"
+backup_if_foreign() {
+  local f="$1"
+  if [ -f "$f" ] && ! grep -q "$MARKER" "$f" 2>/dev/null; then
+    cp "$f" "$f.bak"
+    echo "⚠️ 既存の $(basename "$f") は pj-vauban 管理外でした → ${f}.bak に退避して上書きします"
+    echo "   必要な独自設定は .bak から手動でマージしてください。"
+  fi
+}
+
 # 1. scripts/gemini_review.py
 mkdir -p "$TARGET/scripts"
+backup_if_foreign "$TARGET/scripts/gemini_review.py"
 cp "$VAUBAN_DIR/scripts/gemini_review.py" "$TARGET/scripts/gemini_review.py"
 echo "✓ scripts/gemini_review.py"
 
 # 2. .pre-commit-config.yaml
+backup_if_foreign "$TARGET/.pre-commit-config.yaml"
 cat > "$TARGET/.pre-commit-config.yaml" << 'EOF'
+# pj-vauban managed — このファイルは setup.sh が生成します。再実行で上書きされます。
 repos:
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
+        exclude: '(^|/)(node_modules|\.venv|venv|vendor|dist|build|__pycache__)/'
 
   - repo: local
     hooks:
@@ -69,7 +85,9 @@ echo "✓ .pre-commit-config.yaml"
 
 # 3. .github/workflows/semgrep.yml
 mkdir -p "$TARGET/.github/workflows"
+backup_if_foreign "$TARGET/.github/workflows/semgrep.yml"
 cat > "$TARGET/.github/workflows/semgrep.yml" << 'EOF'
+# pj-vauban managed — このファイルは setup.sh が生成します。再実行で上書きされます。
 name: Semgrep
 on:
   push:
@@ -86,7 +104,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install semgrep==1.166.0   # 再現性のためピン留め。定期的に更新する
+      - run: pip install 'semgrep~=1.166'   # v1系のパッチ/ルール追従を許容しつつ再現性を確保
       # 検出があれば --error で job を落とし push/PR をブロックする
       - name: Semgrep scan
         run: semgrep scan --config=auto --sarif --output=semgrep.sarif --error
@@ -132,7 +150,9 @@ fi
 
 # 4. .github/dependabot.yml（ecosystem 指定時のみ）
 if [ "$ECOSYSTEM" != "none" ]; then
+  backup_if_foreign "$TARGET/.github/dependabot.yml"
   cat > "$TARGET/.github/dependabot.yml" << EOF
+# pj-vauban managed — このファイルは setup.sh が生成します。再実行で上書きされます。
 version: 2
 updates:
   - package-ecosystem: "$ECOSYSTEM"
@@ -160,14 +180,17 @@ install_deps() {
   python3 -m pip install pre-commit detect-secrets --quiet --break-system-packages 2>/dev/null && return 0
   return 1
 }
-if ! install_deps; then
+if python3 -c "import pre_commit, detect_secrets" 2>/dev/null; then
+  echo "✓ pre-commit / detect-secrets 既に導入済み（インストールskip）"
+elif ! install_deps; then
   echo "✗ pre-commit / detect-secrets のインストールに失敗しました。"
   echo "  pipx での導入を検討してください:"
   echo "    pipx install pre-commit && pipx install detect-secrets"
   echo "  （生成済みの設定ファイルはそのまま残っています）"
   exit 1
+else
+  echo "✓ pre-commit / detect-secrets インストール済み"
 fi
-echo "✓ pre-commit / detect-secrets インストール済み"
 
 if [ ! -f ".secrets.baseline" ]; then
   python3 -m detect_secrets scan \
