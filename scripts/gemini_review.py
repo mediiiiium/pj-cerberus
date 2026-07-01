@@ -6,7 +6,7 @@ import subprocess
 
 # vauban から配布されたバージョン。`--version` でどの構成が入っているか確認できる。
 # setup.sh の VAUBAN_VERSION と揃える。更新は setup.sh の再実行で行う。
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 # lock ファイル・自動生成物・ビルド成果物は差分から除外する。
 # これらが混ざると 100k 文字制限で実コードが切り捨てられ、レビューから漏れる。
@@ -95,8 +95,8 @@ def review(diff: str) -> str:
 """
 
     # 無料枠で使えるモデルは変わるため env で差し替え可能にする。
-    # 例: gemini-2.5-flash / gemini-flash-latest など（要・最新の無料枠確認）
-    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    # 例: gemini-flash-latest など（要・最新の無料枠確認）
+    model = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
     # pre-push フックなので、API が応答しないと push がハングする。
     # 開発テンポを優先し既定 10 秒。超過時は例外→スキップして push を通す。
