@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read   # push/PR 作成は GH_PAT（secrets.GH_PAT）経由で行い、GITHUB_TOKEN は使わない
+
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -32,7 +35,15 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          VAUBAN_REPOS: ${{ vars.VAUBAN_REPOS }}
         run: |
+          if [ -z "$VAUBAN_REPOS" ]; then
+            echo "ERROR: VAUBAN_REPOS repository variable is not set" >&2
+            echo "  Settings > Secrets and variables > Actions > Variables" >&2
+            echo '  例: [["repo-a","npm"],["repo-b","pip"]]' >&2
+            exit 1
+          fi
+
           gh auth setup-git
           distribute() {
             local repo=$1
@@ -52,8 +63,8 @@ jobs:
             cd ../..
           }
 
-          distribute now-on-tap npm
-          distribute podcast    pip
-          distribute sora       pip
-          distribute mcp-jp     none
-          distribute brew-drop  none
+          echo "$VAUBAN_REPOS" | jq -c '.[]' | while read -r pair; do
+            repo=$(echo "$pair" | jq -r '.[0]')
+            ecosystem=$(echo "$pair" | jq -r '.[1]')
+            distribute "$repo" "$ecosystem"
+          done

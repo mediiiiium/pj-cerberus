@@ -2,9 +2,9 @@
 # Usage: bash setup.sh <target-repo-path> [ecosystem: npm|pip|none]
 #
 # Examples:
-#   bash setup.sh ~/now-on-tap npm
-#   bash setup.sh ~/podcast pip
-#   bash setup.sh ~/brew-drop none
+#   bash setup.sh ~/my-web-app npm
+#   bash setup.sh ~/my-api pip
+#   bash setup.sh ~/my-cli-tool none
 
 set -e
 

@@ -19,15 +19,6 @@ from pathlib import Path
 
 GITHUB_OWNER = "mediiiiium"
 
-# (repo, dependabot-ecosystem)
-REPOS = [
-    ("now-on-tap", "npm"),
-    ("podcast",    "pip"),
-    ("sora",       "pip"),
-    ("mcp-jp",     "none"),
-    ("brew-drop",  "none"),
-]
-
 RESCUE_BRANCH = "vauban/rescue-semgrep"
 RESCUE_LABEL  = "vauban-rescue"
 
@@ -340,12 +331,26 @@ def rescue_repo(repo):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def load_repos() -> list:
+    """対象リポジトリの一覧は個人運用の内部情報のためソースに含めない。
+    環境変数 VAUBAN_REPOS（JSON配列 [["repo","ecosystem"], ...]）から読む。"""
+    raw = os.environ.get("VAUBAN_REPOS")
+    if not raw:
+        print("ERROR: VAUBAN_REPOS not set (JSON array of [repo, ecosystem] pairs)", file=sys.stderr)
+        sys.exit(1)
+    try:
+        return [(repo, eco) for repo, eco in json.loads(raw)]
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
+        print(f"ERROR: invalid VAUBAN_REPOS: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     if "GH_PAT" not in os.environ:
         print("ERROR: GH_PAT not set", file=sys.stderr)
         sys.exit(1)
 
-    for repo, _ in REPOS:
+    for repo, _ in load_repos():
         try:
             rescue_repo(repo)
         except subprocess.CalledProcessError as e:
